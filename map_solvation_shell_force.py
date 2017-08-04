@@ -220,7 +220,7 @@ for row in range(nMols) :
         #out_file.write(str(first_moment_inv_mass[row][column])+ ' ')
 		out_file.write("%d %d %f\n" % (row, column, first_moment_inv_mass[row][column]))
 
-out2_file.write('The second moment of the inverse mass matrix is:\n')
+out2_file.write('#The second moment of the inverse mass matrix is:\n')
 
 for row in range(nMols) :
 	for column in range(nMols) :
