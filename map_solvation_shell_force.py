@@ -3,7 +3,7 @@
 # Takes a CG mapped trajectory and maps a mirror bead (e.g., to represent the first solvation shell) as the cernter of mass of all solvent beads within a set distance from the base (lipid head group)
 # Assign forces based on the inverse mass matrix for overlapping CG mapping
 # Inputs: data.lammpstrj atom_index1(base) atom_index2(solvent) num_atoms_per_molecule ShellRad num_CG_atoms_per_frame
-# Currently assumes that the system is composed of identical molecules plus solvent and sorted (xyz are in col 3-5)
+# Currently assumes that the system is composed of identical solute and solvent molecules and sorted (xyz are in col 3-5)
 # Atom indices are based on its position within the molecule topology (first bead is index 0)
 
 import numpy as np
@@ -34,7 +34,6 @@ Z = 0
 delta = [0, 0, 0]
 
 in_file = open(name,'r')
-out_file = open("test.lammpstrj",'w')
 
 all_lines = in_file.readlines()
 in_file.close()
@@ -43,20 +42,26 @@ nAtoms = int(all_lines[3].split()[0])
 nFrames = (len(all_lines)-9)/nAtoms
 nMols = nCG/nAtomsMol
 
+out_file = open("ExplicitForce_n=%d.lammpstrj" % nFrames,'w')
+
 print "Analyzing a total of %d frames, each has %d atoms that make up %d molecules\n" % (nFrames,nCG,nMols)
 print "Creating %d more atoms per frame to represent the mirror (solvent) bead\n" % nMols
 write = out_file.write
 # inv_mass = np.zeros(nFrames, nMols, nMols) (might take up too much storage)
-# Construct the matrix which stores the inverse mass matrix and the first and second moment of inverse mass matrix of CG sites
+# Construct the matrix which stores the inverse mass & mass matrix and the first and second moment of inverse mass matrix of CG sites
 inv_mass = np.zeros((nMols, nMols))
-first_moment_inv_mass = np.zeros((nMols, nMols)) 
+mass = np.zeros((nMols, nMols))
+first_moment_inv_mass = np.zeros((nMols, nMols))
+first_moment_mass = np.zeros((nMols, nMols)) 
 second_moment_inv_mass = np.zeros((nMols, nMols))
+var_inv_mass = np.zeros((nMols, nMols))
 # Construct the configuration and momentum mapping matrix for all frames
-# config = np.zeros(nFrames, nMols, nAtoms - nCG) (might take up too much storage)
-# momentum = np.zeros(nFrames, nMols, nAtoms - nCG) (might take up too much storage)
-# Construct the force matrix which stores the 3-d forces on the solvent molecules
+# config_map = np.zeros(nFrames, nMols, nAtoms - nCG) (might take up too much storage)
+# momentum_map = np.zeros(nFrames, nMols, nAtoms - nCG) (might take up too much storage)
+# Construct the force matrix which stores the 3D forces on the solvent molecules
 force = np.zeros((nAtoms - nCG, 3))
-Virtual_vec = np.zeros((nCG, 3))
+# Construct the matrix that stores the position of all virtual solvent particles row by row
+Virtual_vec = np.zeros((nMols, 3))
 
 for i in range(nFrames) :
 	# first modify the 9 head lines with new number of atoms and print the rest of the header
@@ -76,10 +81,10 @@ for i in range(nFrames) :
 
 	for item in header :
 		write(item)
-		
+    
 	# construct a neightbor grid of solvent particles
 	sol_index = i*(nAtoms+9) + nMols*nAtomsMol + 9
-	# number of cells in each dimension
+	# max index of cells in each dimension
 	Xi = math.floor(X/ShellRad)
 	Yj = math.floor(Y/ShellRad)
 	Zk = math.floor(Z/ShellRad)
@@ -87,18 +92,19 @@ for i in range(nFrames) :
 	length = X/Xi
 	width = Y/Yj
 	height = Z/Zk
-	# neighgrid[Xi][Yj][Zk][0][0] = num of solvent particles in each cell, neighgrid[Xi][Yj][Zk][n>0] : coordinates of the nth solvent particle in cell (Xi, Yj, Zk)
+	# neighgrid[Xi][Yj][Zk][0][0] = num of solvent particles in each cell, neighgrid[Xi][Yj][Zk][n>0] : data of the nth solvent particle in cell (Xi, Yj, Zk)
+	# create a zero matrix large enough to store all data of solvent particles in (Xi+1)*(Yj+1)*(Zk+1) cells
 	neighgrid = np.zeros((Xi+1, Yj+1, Zk+1, nAtoms - nCG, 8))
-	
-	# construct the configuration CG mapping matrix
+    
+	# construct and initialize the configuration CG mapping matrix
 	config_map = np.zeros((nMols, nAtoms - nCG))
 
 	for nSol in range(nAtoms - nCG) :
 		Sol_bead = np.asarray([float(item) for item in all_lines[sol_index + nSol].split()])
 		force[nSol] = np.asarray([float(item) for item in all_lines[sol_index + nSol].split()][5:8])
-		Xi_Sol_grid = int(math.floor((Sol_bead[2]-Xb[0])/length))
-		Yj_Sol_grid = int(math.floor((Sol_bead[3]-Yb[0])/length))
-		Zk_Sol_grid = int(math.floor((Sol_bead[4]-Zb[0])/length))
+		Xi_Sol_grid = math.floor((Sol_bead[2]-Xb[0])/length)
+		Yj_Sol_grid = math.floor((Sol_bead[3]-Yb[0])/length)
+		Zk_Sol_grid = math.floor((Sol_bead[4]-Zb[0])/length)
 		neighgrid[Xi_Sol_grid][Yj_Sol_grid][Zk_Sol_grid][0][0] += 1
 		counter = neighgrid[Xi_Sol_grid][Yj_Sol_grid][Zk_Sol_grid][0][0]
 		neighgrid[Xi_Sol_grid][Yj_Sol_grid][Zk_Sol_grid][counter] = Sol_bead
@@ -112,51 +118,54 @@ for i in range(nFrames) :
 			line = all_lines[line_index + k]
 			molecule.append(line)
 		base_vec = np.asarray([float(item) for item in molecule[aType1].split()[2:5]])
-		Xi_grid = int(math.floor((base_vec[0]-Xb[0])/length))
-		Yj_grid = int(math.floor((base_vec[1]-Yb[0])/length))
-		Zk_grid = int(math.floor((base_vec[2]-Zb[0])/length))
+		Xi_grid = math.floor((base_vec[0]-Xb[0])/length)
+		Yj_grid = math.floor((base_vec[1]-Yb[0])/length)
+		Zk_grid = math.floor((base_vec[2]-Zb[0])/length)
 		range_x = range_y = range_z = [-1, 0, 1]
 		# now iterate through all solvent particles in neightboring cells to find the ones in the first solvation shell
 		if  Xi_grid == 0 :
 			range_x = [0, 1, Xi]
-	       	if  Xi_grid == Xi :
-	       		range_x = [-Xi, -1, 0]
-	       	if  Yj_grid == 0 :
-	       		range_y = [0, 1, Yj]
-	       	if  Yj_grid == Yj :
-	       		range_y = [-Yj, -1, 0]
-	       	if  Zk_grid == 0 :
-	       		range_z = [0, 1, Zk]
-	       	if  Zk_grid == Zk :
-	       		range_z = [-Zk, -1, 0]
+		if  Xi_grid == Xi :
+			range_x = [-Xi, -1, 0]
+		if  Yj_grid == 0 :
+			range_y = [0, 1, Yj]
+		if  Yj_grid == Yj :
+			range_y = [-Yj, -1, 0]
+		if  Zk_grid == 0 :
+			range_z = [0, 1, Zk]
+		if  Zk_grid == Zk :
+			range_z = [-Zk, -1, 0]
 		for a in range_x :
 	       		for b in range_y :
 	       			for c in range_z :
 	       				#print(str(Xi_grid)+"\n")
-					#print(a)
-					for nSol in range(int(neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][0][0])) :
-	       					Sol_vec =  neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][nSol+1][2:5]
-	       					delta[0] = min(abs(base_vec[0] - Sol_vec[0]), X - abs(base_vec[0] - Sol_vec[0]))
-	       					delta[1] = min(abs(base_vec[1] - Sol_vec[1]), Y - abs(base_vec[1] - Sol_vec[1]))
-	       					delta[2] = min(abs(base_vec[2] - Sol_vec[2]), Z - abs(base_vec[2] - Sol_vec[2]))
-	       					distance = np.linalg.norm(delta)
-	       					if distance <= ShellRad :
-	       						if X - abs(base_vec[0] - Sol_vec[0]) < abs(base_vec[0] - Sol_vec[0]) :
-	       							Sol_vec[0] = Sol_vec[0] + np.sign(base_vec[0] - Sol_vec[0]) * X
-	       						if Y - abs(base_vec[1] - Sol_vec[1]) < abs(base_vec[1] - Sol_vec[1]) :
-	       							Sol_vec[1] = Sol_vec[1] + np.sign(base_vec[1] - Sol_vec[1]) * Y
-	       						if Z - abs(base_vec[2] - Sol_vec[2]) < abs(base_vec[2] - Sol_vec[2]) :
-	       							Sol_vec[2] = Sol_vec[2] + np.sign(base_vec[2] - Sol_vec[2]) * Z
-							SolShell.append(Sol_vec)
-							config_map[j][neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][nSol+1][0] - nCG - 1] = 1
-							# print("%f %f %f\n" % (Sol_vec[0], Sol_vec[1], Sol_vec[2]))
+						#print(a)
+						for nSol in range(int(neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][0][0])) :
+							Sol_vec =  neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][nSol+1][2:5]
+							delta[0] = min(abs(base_vec[0] - Sol_vec[0]), X - abs(base_vec[0] - Sol_vec[0]))
+							delta[1] = min(abs(base_vec[1] - Sol_vec[1]), Y - abs(base_vec[1] - Sol_vec[1]))
+							delta[2] = min(abs(base_vec[2] - Sol_vec[2]), Z - abs(base_vec[2] - Sol_vec[2]))
+							distance = np.linalg.norm(delta)
+							if distance <= ShellRad :
+								if X - abs(base_vec[0] - Sol_vec[0]) < abs(base_vec[0] - Sol_vec[0]) :
+									Sol_vec[0] = Sol_vec[0] + np.sign(base_vec[0] - Sol_vec[0]) * X
+								if Y - abs(base_vec[1] - Sol_vec[1]) < abs(base_vec[1] - Sol_vec[1]) :
+									Sol_vec[1] = Sol_vec[1] + np.sign(base_vec[1] - Sol_vec[1]) * Y
+								if Z - abs(base_vec[2] - Sol_vec[2]) < abs(base_vec[2] - Sol_vec[2]) :
+									Sol_vec[2] = Sol_vec[2] + np.sign(base_vec[2] - Sol_vec[2]) * Z
+								SolShell.append(Sol_vec)
+								config_map[j][neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][nSol+1][0] - nCG - 1] = 1
+								# print("%f %f %f\n" % (Sol_vec[0], Sol_vec[1], Sol_vec[2]))
 		SolShell_mat = np.zeros((len(SolShell),3))
-		config_map[j] /= len(SolShell) 
+		config_map[j] /= len(SolShell)
+		# print out the number of solvent molecules in each solvation shell
+		# print(len(SolShell))
 		counter = 0
 		for row in SolShell :
 			SolShell_mat[counter,:] = row[:]
 			counter = counter + 1
 		Virtual_vec[j] = np.sum(SolShell_mat, axis = 0)/len(SolShell)
+		# Adjust of virtual bead position due to the periodic boundary condition
 		if Virtual_vec[j][0] > Xb[1] :
 			Virtual_vec[j][0] = Virtual_vec[j][0] - X
 		if Virtual_vec[j][1] > Yb[1] :
@@ -170,59 +179,93 @@ for i in range(nFrames) :
 		if Virtual_vec[j][2] < Zb[0] :
 			Virtual_vec[j][2] = Virtual_vec[j][2] + Z
 
-#		Virtual_vec = np.sum(np.asmatrix([float(num) for num in item.split()[2:5] for item in SolShell]), axis = 0)/len(SolShell)
-#		print Virtual_vec
-#	base_vec = np.asarray([float(item) for item in molecule[aType1].split()[2:5]])
-#       dir_vec = np.asarray([float(item) for item in molecule[aType2].split()[2:5]])
-#       mirror_vec = (base_vec - dir_vec)
-#       mirror_norm = np.linalg.norm(mirror_vec)
-#       mirror_vec = mirror_vec * mirrorLen / mirror_norm
+		#	Virtual_vec = np.sum(np.asmatrix([float(num) for num in item.split()[2:5] for item in SolShell]), axis = 0)/			len(SolShell)
+		#	print Virtual_vec
+        #	base_vec = np.asarray([float(item) for item in molecule[aType1].split()[2:5]])
+        #   dir_vec = np.asarray([float(item) for item in molecule[aType2].split()[2:5]])
+        #   mirror_vec = (base_vec - dir_vec)
+        #   mirror_norm = np.linalg.norm(mirror_vec)
+        #   mirror_vec = mirror_vec * mirrorLen / mirror_norm
 
-	#       write new lines
-		
-	inv_mass = np.dot(config_map, np.transpose(config_map))
+	#	write new lines
+
+	inv_mass = np.dot(config_map, np.transpose(config_map)) # assuming the mass matrix of FG space is identity,
+	# full expression: M^-1 = C m^-1 C^T
+	mass = np.linalg.inv(inv_mass)
 	first_moment_inv_mass += inv_mass
-
+	first_moment_mass += mass
 	for row in range(nMols) :
 		for column in range(nMols) :
 			second_moment_inv_mass[row][column] += np.square(inv_mass[row][column])
         
-	momentum_map = np.linalg.inv(inv_mass).dot(config_map)	       
+	momentum_map = mass.dot(config_map)
 	force_CG = np.dot(momentum_map, force)
-        print(force_CG)
+	# print(force_CG)
 
 	for j in range(nMols) :
-		out_file.write("%d 0 %f %f %f %f %f %f\n" % (atom_index, Virtual_vec[j][0], Virtual_vec[j][1], Virtual_vec[j][2], force_CG[j][0], force_CG[j][1], force_CG[j][2]))
-		atom_index = atom_index + 1
-		molecule = []
-		line_index = i*(nAtoms+9) + j*(nAtomsMol) + 9
-		for k in range(nAtomsMol) :
-			line = all_lines[line_index + k]
-			molecule.append(line)
-		for row in molecule :
-			data = row.split()
-			data[0] = str(atom_index)
-			atom_index = atom_index + 1
-			out_file.write(" ".join(data)+"\n")
+            out_file.write("%d 0 %f %f %f %f %f %f\n" % (atom_index, Virtual_vec[j][0], Virtual_vec[j][1], Virtual_vec[j][2], force_CG[j][0], force_CG[j][1], force_CG[j][2]))
+            atom_index = atom_index + 1
+	    molecule = []
+	    line_index = i*(nAtoms+9) + j*(nAtomsMol) + 9
+	    for k in range(nAtomsMol) :
+		    line = all_lines[line_index + k]
+		    molecule.append(line)
+	    for row in molecule :
+		    data = row.split()
+		    data[0] = str(atom_index)
+		    atom_index = atom_index + 1
+		    out_file.write(" ".join(data)+"\n")
 
 first_moment_inv_mass /= nFrames
+first_moment_mass /= nFrames
 second_moment_inv_mass /= nFrames
+for row in range(nMols) :
+	for column in range(nMols) :
+		var_inv_mass[row][column] = second_moment_inv_mass[row][column] - np.square(first_moment_inv_mass[row][column])
 
 out_file.close()
 
-out_file = open("inv_mass.lammpstrj", 'w')
-out2_file = open("inv_mass2.lammpstrj", 'w')
+out_file_inv = open("inv_mass_n=%d.lammpstrj" % nFrames, 'w')
 
-out_file.write('#The first moment of the inverse mass matrix is:\n')
+out_file_inv.write('The first moment of the inverse mass matrix is:\n')
+
+for row in range(nMols) :
+    for column in range(nMols) :
+		#out_file.write(str(first_moment_inv_mass[row][column])+ ' ')
+		out_file_inv.write("%d %d %f\n" % (row, column, first_moment_inv_mass[row][column]))
+
+out_file_inv.close()
+
+out_file = open("mass_n=%d.lammpstrj" % nFrames, 'w')
+
+out_file.write('The first moment of the mass matrix is:\n')
+
+for row in range(nMols) :
+    for column in range(nMols) :
+		#out_file.write(str(first_moment_mass[row][column])+ ' ')
+		out_file.write("%d %d %f\n" % (row, column, first_moment_mass[row][column]))
+
+out_file.close()
+
+out_file_inv2 = open("inv_mass2_n=%d.lammpstrj" % nFrames, 'w')
+
+out_file_inv2.write('The second moment of the inverse mass matrix is:\n')
+
+for row in range(nMols) :
+    for column in range(nMols) :
+		#out_file.write(str(second_moment_inv_mass[row][column])+ ' ')
+		out_file_inv2.write("%d %d %f\n" % (row, column, second_moment_inv_mass[row][column]))
+
+out_file_inv2.close()
+
+out_file_inv_var = open("inv_mass_var_n=%d.lammpstrj" % nFrames, 'w')
+
+out_file_inv_var.write('The variance of the inverse mass matrix is:\n')
 
 for row in range(nMols) :
 	for column in range(nMols) :
-        #out_file.write(str(first_moment_inv_mass[row][column])+ ' ')
-		out_file.write("%d %d %f\n" % (row, column, first_moment_inv_mass[row][column]))
+		#out_file.write(str(second_moment_inv_mass[row][column])+ ' ')
+		out_file_inv_var.write("%d %d %f\n" % (row, column, var_inv_mass[row][column]))
 
-out2_file.write('#The second moment of the inverse mass matrix is:\n')
-
-for row in range(nMols) :
-	for column in range(nMols) :
-		out2_file.write("%d %d %f\n" % (row, column, second_moment_inv_mass[row][column]))
+out_file_inv_var.close()
 
