@@ -12,8 +12,8 @@ import sys as sys
 
 #file details from custom dump trajectory
 #log file is now .traj file
-if(len(sys.argv) != 7) :
-        print "ERROR data.lammpstrj atom_index1 atom_index2 num_atoms_per_molecule ShellRad num_CG_atoms_per_frame"
+if(len(sys.argv) != 9) :
+        print "ERROR data.lammpstrj atom_index1 atom_index2 num_atoms_per_molecule ShellRad num_CG_atoms_per_frame frameStart frameEnd"
         exit(0)
 
 name = sys.argv[1] 
@@ -22,6 +22,10 @@ aType2 = int(sys.argv[3])
 nAtomsMol = int(sys.argv[4])
 ShellRad = float(sys.argv[5])
 nCG = int(sys.argv[6]) # number of actual CG sites per frame (nAtoms - nSolvent)
+
+frameStart = int(sys.argv[7])
+frameEnd = int(sys.argv[8])
+
 # Upper and lower bound of the coordinates
 Xb = [0, 0]
 Yb = [0, 0]
@@ -63,9 +67,11 @@ force = np.zeros((nAtoms - nCG, 3))
 # Construct the matrix that stores the position of all virtual solvent particles row by row
 Virtual_vec = np.zeros((nMols, 3))
 
-for i in range(nFrames) :
+nFramesAnalyzed = frameEnd - frameStart + 1
+
+for i in range(nFramesAnalyzed) :
 	# first modify the 9 head lines with new number of atoms and print the rest of the header
-	line_index = i*(nAtoms+9)
+	line_index = (i+frameStart)*(nAtoms+9)
 	header = []
 	Xb = np.asarray([float(item) for item in all_lines[line_index + 5].split()])
 	Yb = np.asarray([float(item) for item in all_lines[line_index + 6].split()])
@@ -111,7 +117,7 @@ for i in range(nFrames) :
 	# now analyze each molecule, append a molecule type 0 and corresponding forces for the mirror bead
 	atom_index = 1
 	for j in range(nMols) :
-		line_index = i*(nAtoms+9) + j*(nAtomsMol) + 9 # line number for the head group of each molecule
+		line_index = (i+frameStart)*(nAtoms+9) + j*(nAtomsMol) + 9 # line number for the head group of each molecule
 		molecule = []
 		SolShell = []
 		for k in range(nAtomsMol) :
@@ -206,7 +212,7 @@ for i in range(nFrames) :
             out_file.write("%d 0 %f %f %f %f %f %f\n" % (atom_index, Virtual_vec[j][0], Virtual_vec[j][1], Virtual_vec[j][2], force_CG[j][0], force_CG[j][1], force_CG[j][2]))
             atom_index = atom_index + 1
 	    molecule = []
-	    line_index = i*(nAtoms+9) + j*(nAtomsMol) + 9
+	    line_index = (i+frameStart)*(nAtoms+9) + j*(nAtomsMol) + 9
 	    for k in range(nAtomsMol) :
 		    line = all_lines[line_index + k]
 		    molecule.append(line)
