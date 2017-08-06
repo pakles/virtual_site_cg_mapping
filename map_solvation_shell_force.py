@@ -88,16 +88,16 @@ for i in range(nFramesAnalyzed) :
 	for item in header :
 		write(item)
     
-	# construct a neightbor grid of solvent particles
+	# construct a neighbor grid of solvent particles
 	sol_index = i*(nAtoms+9) + nMols*nAtomsMol + 9
 	# max index of cells in each dimension
-	Xi = math.floor(X/ShellRad)
-	Yj = math.floor(Y/ShellRad)
-	Zk = math.floor(Z/ShellRad)
+	Xi = int(math.floor(X/ShellRad))
+	Yj = int(math.floor(Y/ShellRad))
+	Zk = int(math.floor(Z/ShellRad))
 	# size of each cell
-	length = X/Xi
-	width = Y/Yj
-	height = Z/Zk
+	length = float(X/Xi)
+	width = float(Y/Yj)
+	height = float(Z/Zk)
 	# neighgrid[Xi][Yj][Zk][0][0] = num of solvent particles in each cell, neighgrid[Xi][Yj][Zk][n>0] : data of the nth solvent particle in cell (Xi, Yj, Zk)
 	# create a zero matrix large enough to store all data of solvent particles in (Xi+1)*(Yj+1)*(Zk+1) cells
 	neighgrid = np.zeros((Xi+1, Yj+1, Zk+1, nAtoms - nCG, 8))
@@ -108,9 +108,9 @@ for i in range(nFramesAnalyzed) :
 	for nSol in range(nAtoms - nCG) :
 		Sol_bead = np.asarray([float(item) for item in all_lines[sol_index + nSol].split()])
 		force[nSol] = np.asarray([float(item) for item in all_lines[sol_index + nSol].split()][5:8])
-		Xi_Sol_grid = math.floor((Sol_bead[2]-Xb[0])/length)
-		Yj_Sol_grid = math.floor((Sol_bead[3]-Yb[0])/length)
-		Zk_Sol_grid = math.floor((Sol_bead[4]-Zb[0])/length)
+		Xi_Sol_grid = int(math.floor((Sol_bead[2]-Xb[0])/length))
+		Yj_Sol_grid = int(math.floor((Sol_bead[3]-Yb[0])/width))
+		Zk_Sol_grid = int(math.floor((Sol_bead[4]-Zb[0])/height))
 		neighgrid[Xi_Sol_grid][Yj_Sol_grid][Zk_Sol_grid][0][0] += 1
 		counter = neighgrid[Xi_Sol_grid][Yj_Sol_grid][Zk_Sol_grid][0][0]
 		neighgrid[Xi_Sol_grid][Yj_Sol_grid][Zk_Sol_grid][counter] = Sol_bead
@@ -124,9 +124,9 @@ for i in range(nFramesAnalyzed) :
 			line = all_lines[line_index + k]
 			molecule.append(line)
 		base_vec = np.asarray([float(item) for item in molecule[aType1].split()[2:5]])
-		Xi_grid = math.floor((base_vec[0]-Xb[0])/length)
-		Yj_grid = math.floor((base_vec[1]-Yb[0])/length)
-		Zk_grid = math.floor((base_vec[2]-Zb[0])/length)
+		Xi_grid = int(math.floor((base_vec[0]-Xb[0])/length))
+		Yj_grid = int(math.floor((base_vec[1]-Yb[0])/width))
+		Zk_grid = int(math.floor((base_vec[2]-Zb[0])/height))
 		range_x = range_y = range_z = [-1, 0, 1]
 		# now iterate through all solvent particles in neightboring cells to find the ones in the first solvation shell
 		if  Xi_grid == 0 :
