@@ -67,6 +67,7 @@ force = np.zeros((nAtoms - nCG, 3))
 # Construct the matrix that stores the position of all virtual solvent particles row by row
 Virtual_vec = np.zeros((nMols, 3))
 
+#frameEnd is inclusive
 nFramesAnalyzed = frameEnd - frameStart + 1
 
 for i in range(nFramesAnalyzed) :
@@ -89,30 +90,47 @@ for i in range(nFramesAnalyzed) :
 		write(item)
     
 	# construct a neighbor grid of solvent particles
-	sol_index = i*(nAtoms+9) + nMols*nAtomsMol + 9
+	sol_index = line_index + nMols*nAtomsMol + 9
 	# max index of cells in each dimension
 	Xi = int(math.floor(X/ShellRad))
 	Yj = int(math.floor(Y/ShellRad))
 	Zk = int(math.floor(Z/ShellRad))
 	# size of each cell
-	length = float(X/Xi)
-	width = float(Y/Yj)
-	height = float(Z/Zk)
+	length = float(X/(Xi+1))
+	width = float(Y/(Yj+1))
+	height = float(Z/(Zk+1))
+        print "Computing frame %d" % i
+        print "Box dimensions: L:%f  W:%f  H:%f and Neigh Cells: %f  %f  %f" % (X, Y, Z, length, width, height)
 	# neighgrid[Xi][Yj][Zk][0][0] = num of solvent particles in each cell, neighgrid[Xi][Yj][Zk][n>0] : data of the nth solvent particle in cell (Xi, Yj, Zk)
 	# create a zero matrix large enough to store all data of solvent particles in (Xi+1)*(Yj+1)*(Zk+1) cells
-	neighgrid = np.zeros((Xi+1, Yj+1, Zk+1, nAtoms - nCG, 8))
+	neighgrid = np.zeros((Xi+1, Yj+1, Zk+1, nAtoms - nCG + 1, 8)) #x, y, z, list size[0] and list of solvent, stats (pos, force) of each solvent particle
     
 	# construct and initialize the configuration CG mapping matrix
 	config_map = np.zeros((nMols, nAtoms - nCG))
 
 	for nSol in range(nAtoms - nCG) :
 		Sol_bead = np.asarray([float(item) for item in all_lines[sol_index + nSol].split()])
-		force[nSol] = np.asarray([float(item) for item in all_lines[sol_index + nSol].split()][5:8])
+		force[nSol] = Sol_bead[5:8]
 		Xi_Sol_grid = int(math.floor((Sol_bead[2]-Xb[0])/length))
 		Yj_Sol_grid = int(math.floor((Sol_bead[3]-Yb[0])/width))
 		Zk_Sol_grid = int(math.floor((Sol_bead[4]-Zb[0])/height))
+                # fix floating point errors
+                if Xi_Sol_grid < 0 :
+                        Xi_Sol_grid = 0
+                if Xi_Sol_grid > Xi :
+                        Xi_Sol_grid = Xi
+                if Yj_Sol_grid < 0 :
+                        Yj_Sol_grid = 0
+                if Yj_Sol_grid > Yj :
+                        Yj_Sol_grid = Yj
+                if Zk_Sol_grid < 0 :
+                        Zk_Sol_grid = 0
+                if Zk_Sol_grid > Zk :
+                        Zk_Sol_grid = Zk        
+#                print Sol_bead
+#                print "Placed in neighgrid %d %d %d" % (Xi_Sol_grid, Yj_Sol_grid, Zk_Sol_grid)
 		neighgrid[Xi_Sol_grid][Yj_Sol_grid][Zk_Sol_grid][0][0] += 1
-		counter = neighgrid[Xi_Sol_grid][Yj_Sol_grid][Zk_Sol_grid][0][0]
+		counter = int(neighgrid[Xi_Sol_grid][Yj_Sol_grid][Zk_Sol_grid][0][0])
 		neighgrid[Xi_Sol_grid][Yj_Sol_grid][Zk_Sol_grid][counter] = Sol_bead
 	# now analyze each molecule, append a molecule type 0 and corresponding forces for the mirror bead
 	atom_index = 1
@@ -127,8 +145,24 @@ for i in range(nFramesAnalyzed) :
 		Xi_grid = int(math.floor((base_vec[0]-Xb[0])/length))
 		Yj_grid = int(math.floor((base_vec[1]-Yb[0])/width))
 		Zk_grid = int(math.floor((base_vec[2]-Zb[0])/height))
+                # fix floating point errors
+                if Xi_grid < 0 :
+                        Xi_grid = 0
+                if Xi_grid > Xi :
+                        Xi_grid = Xi
+                if Yj_grid < 0 :
+                        Yj_grid = 0
+                if Yj_grid > Yj :
+                        Yj_grid = Yj
+                if Zk_grid < 0 :
+                        Zk_grid = 0
+                if Zk_grid > Zk :
+                        Zk_grid = Zk        
+
+#                print "For molecule %d, checking in neighgrid %d %d %d" % (j, Xi_grid, Yj_grid, Zk_grid)
+
 		range_x = range_y = range_z = [-1, 0, 1]
-		# now iterate through all solvent particles in neightboring cells to find the ones in the first solvation shell
+		# now iterate through all solvent particles in neighboring cells to find the ones in the solvation shell
 		if  Xi_grid == 0 :
 			range_x = [0, 1, Xi]
 		if  Xi_grid == Xi :
@@ -146,27 +180,32 @@ for i in range(nFramesAnalyzed) :
 	       			for c in range_z :
 	       				#print(str(Xi_grid)+"\n")
 						#print(a)
-						for nSol in range(int(neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][0][0])) :
-							Sol_vec =  neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][nSol+1][2:5]
-							delta[0] = min(abs(base_vec[0] - Sol_vec[0]), X - abs(base_vec[0] - Sol_vec[0]))
-							delta[1] = min(abs(base_vec[1] - Sol_vec[1]), Y - abs(base_vec[1] - Sol_vec[1]))
-							delta[2] = min(abs(base_vec[2] - Sol_vec[2]), Z - abs(base_vec[2] - Sol_vec[2]))
-							distance = np.linalg.norm(delta)
-							if distance <= ShellRad :
-								if X - abs(base_vec[0] - Sol_vec[0]) < abs(base_vec[0] - Sol_vec[0]) :
-									Sol_vec[0] = Sol_vec[0] + np.sign(base_vec[0] - Sol_vec[0]) * X
-								if Y - abs(base_vec[1] - Sol_vec[1]) < abs(base_vec[1] - Sol_vec[1]) :
-									Sol_vec[1] = Sol_vec[1] + np.sign(base_vec[1] - Sol_vec[1]) * Y
-								if Z - abs(base_vec[2] - Sol_vec[2]) < abs(base_vec[2] - Sol_vec[2]) :
-									Sol_vec[2] = Sol_vec[2] + np.sign(base_vec[2] - Sol_vec[2]) * Z
-								SolShell.append(Sol_vec)
-								config_map[j][neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][nSol+1][0] - nCG - 1] = 1
+#                                        print "This neighgrid has %d solvent particles" % (int(neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][0][0]))
+					for nSol in range(int(neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][0][0])) :
+						Sol_vec =  neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][nSol+1][2:5]
+						delta[0] = min(abs(base_vec[0] - Sol_vec[0]), X - abs(base_vec[0] - Sol_vec[0]))
+						delta[1] = min(abs(base_vec[1] - Sol_vec[1]), Y - abs(base_vec[1] - Sol_vec[1]))
+						delta[2] = min(abs(base_vec[2] - Sol_vec[2]), Z - abs(base_vec[2] - Sol_vec[2]))
+						distance = np.linalg.norm(delta)
+#                                                print "For molecule %d, checking solvent with distance %f" % (j, distance)
+#                                                print "For molecule %d, checking solvent in neighgrid: %d %d %d" % (j, a, b, c)
+						if distance <= ShellRad :
+							if X - abs(base_vec[0] - Sol_vec[0]) < abs(base_vec[0] - Sol_vec[0]) :
+								Sol_vec[0] = Sol_vec[0] + np.sign(base_vec[0] - Sol_vec[0]) * X
+                                                        if Y - abs(base_vec[1] - Sol_vec[1]) < abs(base_vec[1] - Sol_vec[1]) :
+								Sol_vec[1] = Sol_vec[1] + np.sign(base_vec[1] - Sol_vec[1]) * Y
+							if Z - abs(base_vec[2] - Sol_vec[2]) < abs(base_vec[2] - Sol_vec[2]) :
+								Sol_vec[2] = Sol_vec[2] + np.sign(base_vec[2] - Sol_vec[2]) * Z
+							SolShell.append(Sol_vec)
+							config_map[j][int(neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][nSol+1][0]) - nCG - 1] = 1
 								# print("%f %f %f\n" % (Sol_vec[0], Sol_vec[1], Sol_vec[2]))
 		SolShell_mat = np.zeros((len(SolShell),3))
 		config_map[j] /= len(SolShell)
 		# print out the number of solvent molecules in each solvation shell
 		# print(len(SolShell))
 		counter = 0
+#                print SolShell
+#                print len(SolShell)
 		for row in SolShell :
 			SolShell_mat[counter,:] = row[:]
 			counter = counter + 1
