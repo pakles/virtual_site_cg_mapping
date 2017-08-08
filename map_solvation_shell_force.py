@@ -74,9 +74,9 @@ for i in range(nFramesAnalyzed) :
 	# first modify the 9 head lines with new number of atoms and print the rest of the header
 	line_index = (i+frameStart)*(nAtoms+9)
 	header = []
-	Xb = np.asarray([float(item) for item in all_lines[line_index + 5].split()], dtype=float64)
-	Yb = np.asarray([float(item) for item in all_lines[line_index + 6].split()], dtype=float64)
-	Zb = np.asarray([float(item) for item in all_lines[line_index + 7].split()], dtype=float64)
+	Xb = np.asarray([float(item) for item in all_lines[line_index + 5].split()], dtype=np.float64)
+	Yb = np.asarray([float(item) for item in all_lines[line_index + 6].split()], dtype=np.float64)
+	Zb = np.asarray([float(item) for item in all_lines[line_index + 7].split()], dtype=np.float64)
 	X = Xb[1] - Xb[0]
 	Y = Yb[1] - Yb[0]
 	Z = Zb[1] - Zb[0]
@@ -141,7 +141,7 @@ for i in range(nFramesAnalyzed) :
 		for k in range(nAtomsMol) :
 			line = all_lines[line_index + k]
 			molecule.append(line)
-		base_vec = np.asarray([float(item) for item in molecule[aType1].split()[2:5]], dtype=float64)
+		base_vec = np.asarray([float(item) for item in molecule[aType1].split()[2:5]], dtype=np.float64)
 		Xi_grid = int(math.floor((base_vec[0]-Xb[0])/length))
 		Yj_grid = int(math.floor((base_vec[1]-Yb[0])/width))
 		Zk_grid = int(math.floor((base_vec[2]-Zb[0])/height))
