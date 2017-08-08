@@ -261,49 +261,50 @@ for i in range(nFramesAnalyzed) :
 		    atom_index = atom_index + 1
 		    out_file.write(" ".join(data)+"\n")
 
-first_moment_inv_mass /= nFrames
-first_moment_mass /= nFrames
-second_moment_inv_mass /= nFrames
+first_moment_inv_mass /= nFramesAnalyzed
+first_moment_mass /= nFramesAnalyzed
+second_moment_inv_mass /= nFramesAnalyzed
 for row in range(nMols) :
 	for column in range(nMols) :
 		var_inv_mass[row][column] = second_moment_inv_mass[row][column] - np.square(first_moment_inv_mass[row][column])
 
 out_file.close()
 
-out_file_inv = open("inv_mass_n=%d.lammpstrj" % nFrames, 'w')
+out_file_inv = open("inv_mass_n=%d.lammpstrj" % nFramesAnalyzed, 'w')
 
 out_file_inv.write('The first moment of the inverse mass matrix is:\n')
 
 for row in range(nMols) :
     for column in range(nMols) :
-		#out_file.write(str(first_moment_inv_mass[row][column])+ ' ')
-		out_file_inv.write("%d %d %f\n" % (row, column, first_moment_inv_mass[row][column]))
+	    #out_file.write(str(first_moment_inv_mass[row][column])+ ' ')
+            out_file_inv.write("%d %d %f\n" % (row, column, first_moment_inv_mass[row][column]))
 
 out_file_inv.close()
 
-out_file = open("mass_n=%d.lammpstrj" % nFrames, 'w')
+out_file = open("mass_n=%d.lammpstrj" % nFramesAnalyzed, 'w')
 
 out_file.write('The first moment of the mass matrix is:\n')
 
 for row in range(nMols) :
-    for column in range(nMols) :
-		#out_file.write(str(first_moment_mass[row][column])+ ' ')
-		out_file.write("%d %d %f\n" % (row, column, first_moment_mass[row][column]))
+        for column in range(nMols) :
+	        #out_file.write(str(first_moment_mass[row][column])+ ' ')
+	        out_file.write("%d %d %f\n" % (row, column, first_moment_mass[row][column]))
+        out_file.write("\n")
 
 out_file.close()
 
-out_file_inv2 = open("inv_mass2_n=%d.lammpstrj" % nFrames, 'w')
+out_file_inv2 = open("inv_mass2_n=%d.lammpstrj" % nFramesAnalyzed, 'w')
 
 out_file_inv2.write('The second moment of the inverse mass matrix is:\n')
 
 for row in range(nMols) :
-    for column in range(nMols) :
-		#out_file.write(str(second_moment_inv_mass[row][column])+ ' ')
-		out_file_inv2.write("%d %d %f\n" % (row, column, second_moment_inv_mass[row][column]))
+        for column in range(nMols) :
+	        #out_file.write(str(second_moment_inv_mass[row][column])+ ' ')
+	        out_file_inv2.write("%d %d %f\n" % (row, column, second_moment_inv_mass[row][column]))
 
 out_file_inv2.close()
 
-out_file_inv_var = open("inv_mass_var_n=%d.lammpstrj" % nFrames, 'w')
+out_file_inv_var = open("inv_mass_var_n=%d.lammpstrj" % nFramesAnalyzed, 'w')
 
 out_file_inv_var.write('The variance of the inverse mass matrix is:\n')
 
