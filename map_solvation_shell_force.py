@@ -53,19 +53,19 @@ print "Creating %d more atoms per frame to represent the mirror (solvent) bead\n
 write = out_file.write
 # inv_mass = np.zeros(nFrames, nMols, nMols) (might take up too much storage)
 # Construct the matrix which stores the inverse mass & mass matrix and the first and second moment of inverse mass matrix of CG sites
-inv_mass = np.zeros((nMols, nMols))
-mass = np.zeros((nMols, nMols))
-first_moment_inv_mass = np.zeros((nMols, nMols))
-first_moment_mass = np.zeros((nMols, nMols)) 
-second_moment_inv_mass = np.zeros((nMols, nMols))
-var_inv_mass = np.zeros((nMols, nMols))
+inv_mass = np.zeros((nMols, nMols), dtype=np.float64)
+mass = np.zeros((nMols, nMols), dtype=np.float64)
+first_moment_inv_mass = np.zeros((nMols, nMols), dtype=np.float64)
+first_moment_mass = np.zeros((nMols, nMols), dtype=np.float64) 
+second_moment_inv_mass = np.zeros((nMols, nMols), dtype=np.float64)
+var_inv_mass = np.zeros((nMols, nMols), dtype=np.float64)
 # Construct the configuration and momentum mapping matrix for all frames
 # config_map = np.zeros(nFrames, nMols, nAtoms - nCG) (might take up too much storage)
 # momentum_map = np.zeros(nFrames, nMols, nAtoms - nCG) (might take up too much storage)
 # Construct the force matrix which stores the 3D forces on the solvent molecules
-force = np.zeros((nAtoms - nCG, 3))
+force = np.zeros((nAtoms - nCG, 3), dtype=np.float64)
 # Construct the matrix that stores the position of all virtual solvent particles row by row
-Virtual_vec = np.zeros((nMols, 3))
+Virtual_vec = np.zeros((nMols, 3), dtype=np.float64)
 
 #frameEnd is inclusive
 nFramesAnalyzed = frameEnd - frameStart + 1
@@ -74,9 +74,9 @@ for i in range(nFramesAnalyzed) :
 	# first modify the 9 head lines with new number of atoms and print the rest of the header
 	line_index = (i+frameStart)*(nAtoms+9)
 	header = []
-	Xb = np.asarray([float(item) for item in all_lines[line_index + 5].split()])
-	Yb = np.asarray([float(item) for item in all_lines[line_index + 6].split()])
-	Zb = np.asarray([float(item) for item in all_lines[line_index + 7].split()])
+	Xb = np.asarray([float(item) for item in all_lines[line_index + 5].split()], dtype=float64)
+	Yb = np.asarray([float(item) for item in all_lines[line_index + 6].split()], dtype=float64)
+	Zb = np.asarray([float(item) for item in all_lines[line_index + 7].split()], dtype=float64)
 	X = Xb[1] - Xb[0]
 	Y = Yb[1] - Yb[0]
 	Z = Zb[1] - Zb[0]
@@ -103,13 +103,13 @@ for i in range(nFramesAnalyzed) :
         print "Box dimensions: L:%f  W:%f  H:%f and Neigh Cells: %f  %f  %f" % (X, Y, Z, length, width, height)
 	# neighgrid[Xi][Yj][Zk][0][0] = num of solvent particles in each cell, neighgrid[Xi][Yj][Zk][n>0] : data of the nth solvent particle in cell (Xi, Yj, Zk)
 	# create a zero matrix large enough to store all data of solvent particles in (Xi+1)*(Yj+1)*(Zk+1) cells
-	neighgrid = np.zeros((Xi+1, Yj+1, Zk+1, nAtoms - nCG + 1, 8)) #x, y, z, list size[0] and list of solvent, stats (pos, force) of each solvent particle
+	neighgrid = np.zeros((Xi+1, Yj+1, Zk+1, nAtoms - nCG + 1, 8), dtype=np.float64) #x, y, z, list size[0] and list of solvent, stats (pos, force) of each solvent particle
     
 	# construct and initialize the configuration CG mapping matrix
-	config_map = np.zeros((nMols, nAtoms - nCG))
+	config_map = np.zeros((nMols, nAtoms - nCG), dtype=np.float64)
 
 	for nSol in range(nAtoms - nCG) :
-		Sol_bead = np.asarray([float(item) for item in all_lines[sol_index + nSol].split()])
+		Sol_bead = np.asarray([float(item) for item in all_lines[sol_index + nSol].split()], dtype=np.float64)
 		force[nSol] = Sol_bead[5:8]
 		Xi_Sol_grid = int(math.floor((Sol_bead[2]-Xb[0])/length))
 		Yj_Sol_grid = int(math.floor((Sol_bead[3]-Yb[0])/width))
@@ -141,7 +141,7 @@ for i in range(nFramesAnalyzed) :
 		for k in range(nAtomsMol) :
 			line = all_lines[line_index + k]
 			molecule.append(line)
-		base_vec = np.asarray([float(item) for item in molecule[aType1].split()[2:5]])
+		base_vec = np.asarray([float(item) for item in molecule[aType1].split()[2:5]], dtype=float64)
 		Xi_grid = int(math.floor((base_vec[0]-Xb[0])/length))
 		Yj_grid = int(math.floor((base_vec[1]-Yb[0])/width))
 		Zk_grid = int(math.floor((base_vec[2]-Zb[0])/height))
@@ -199,7 +199,7 @@ for i in range(nFramesAnalyzed) :
 							SolShell.append(Sol_vec)
 							config_map[j][int(neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][nSol+1][0]) - nCG - 1] = 1
 								# print("%f %f %f\n" % (Sol_vec[0], Sol_vec[1], Sol_vec[2]))
-		SolShell_mat = np.zeros((len(SolShell),3))
+		SolShell_mat = np.zeros((len(SolShell),3), dtype=np.float64)
 		config_map[j] /= len(SolShell)
 		# print out the number of solvent molecules in each solvation shell
 		# print(len(SolShell))
@@ -209,7 +209,7 @@ for i in range(nFramesAnalyzed) :
 		for row in SolShell :
 			SolShell_mat[counter,:] = row[:]
 			counter = counter + 1
-		Virtual_vec[j] = np.sum(SolShell_mat, axis = 0)/len(SolShell)
+		Virtual_vec[j] = np.sum(SolShell_mat, axis = 0, dtype=np.float64)/float(len(SolShell))
 		# Adjust of virtual bead position due to the periodic boundary condition
 		if Virtual_vec[j][0] > Xb[1] :
 			Virtual_vec[j][0] = Virtual_vec[j][0] - X
