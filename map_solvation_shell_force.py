@@ -201,7 +201,7 @@ for i in range(nFramesAnalyzed) :
 							config_map[j][int(neighgrid[Xi_grid + a][Yj_grid + b][Zk_grid + c][nSol+1][0]) - nCG - 1] = 1
 								# print("%f %f %f\n" % (Sol_vec[0], Sol_vec[1], Sol_vec[2]))
 		SolShell_mat = np.zeros((len(SolShell),3), dtype=np.float64)
-		config_map[j] /= len(SolShell)
+		config_map[j] /= float(len(SolShell))
 		# print out the number of solvent molecules in each solvation shell
 		# print(len(SolShell))
 		counter = 0
