@@ -2,7 +2,7 @@
 
 # Takes a CG mapped trajectory and maps a mirror bead (e.g., to represent the first solvation shell) as the cernter of mass of all solvent beads within a set distance from the base (lipid head group)
 # Assign forces based on the inverse mass matrix for overlapping CG mapping
-# Inputs: data.lammpstrj atom_index1(base) atom_index2(solvent) num_atoms_per_molecule ShellRad num_CG_atoms_per_frame
+# Inputs: data.lammpstrj atom_index1(base) atom_index2(solvent) num_atoms_per_molecule ShellRad NeighBin num_CG_atoms_per_frame frameStart frameEnd
 # Currently assumes that the system is composed of identical solute and solvent molecules and sorted (xyz are in col 3-5)
 # Atom indices are based on its position within the molecule topology (first bead is index 0)
 
@@ -44,12 +44,15 @@ all_lines = in_file.readlines()
 in_file.close()
 
 nAtoms = int(all_lines[3].split()[0])
-nFrames = (len(all_lines)-9)/nAtoms
+# nFrames = (len(all_lines)-9)/nAtoms
 nMols = nCG/nAtomsMol
 
-out_file = open("ExplicitForce_n=%d.lammpstrj" % nFrames,'w')
+#frameEnd is inclusive
+nFramesAnalyzed = frameEnd - frameStart + 1
 
-print "Analyzing a total of %d frames, each has %d atoms that make up %d molecules\n" % (nFrames,nCG,nMols)
+out_file = open("ExplicitForce_n=%d.lammpstrj" % nFramesAnalyzed,'w')
+
+print "Analyzing a total of %d frames, each has %d atoms that make up %d molecules\n" % (nFramesAnalyzed,nCG,nMols)
 print "Creating %d more atoms per frame to represent the mirror (solvent) bead\n" % nMols
 write = out_file.write
 # inv_mass = np.zeros(nFrames, nMols, nMols) (might take up too much storage)
@@ -67,9 +70,6 @@ var_inv_mass = np.zeros((nMols, nMols), dtype=np.float64)
 force = np.zeros((nAtoms - nCG, 3), dtype=np.float64)
 # Construct the matrix that stores the position of all virtual solvent particles row by row
 Virtual_vec = np.zeros((nMols, 3), dtype=np.float64)
-
-#frameEnd is inclusive
-nFramesAnalyzed = frameEnd - frameStart + 1
 
 for i in range(nFramesAnalyzed) :
 	# first modify the 9 head lines with new number of atoms and print the rest of the header
@@ -104,7 +104,7 @@ for i in range(nFramesAnalyzed) :
         print "Box dimensions: L:%f  W:%f  H:%f and Neigh Cells: %f  %f  %f" % (X, Y, Z, length, width, height)
 	# neighgrid[Xi][Yj][Zk][0][0] = num of solvent particles in each cell, neighgrid[Xi][Yj][Zk][n>0] : data of the nth solvent particle in cell (Xi, Yj, Zk)
 	# create a zero matrix large enough to store all data of solvent particles in (Xi+1)*(Yj+1)*(Zk+1) cells
-	neighgrid = np.zeros((Xi+1, Yj+1, Zk+1, nAtoms - nCG + 1, 8), dtype=np.float64) #x, y, z, list size[0] and list of solvent, stats (pos, force) of each solvent particle
+	neighgrid = np.zeros((Xi+1, Yj+1, Zk+1, nAtoms - nCG + 1, 8), dtype=np.float64) #x, y, z, list size[0] and list of solvent, data (pos, force) of each solvent particle
     
 	# construct and initialize the configuration CG mapping matrix
 	config_map = np.zeros((nMols, nAtoms - nCG), dtype=np.float64)
@@ -268,7 +268,7 @@ second_moment_inv_mass /= nFramesAnalyzed
 for row in range(nMols) :
 	for column in range(nMols) :
 		var_inv_mass[row][column] = second_moment_inv_mass[row][column] - np.square(first_moment_inv_mass[row][column])
-        out_file.write("\n")
+	out_file.write("\n")
 out_file.close()
 
 out_file_inv = open("inv_mass_n=%d.lammpstrj" % nFramesAnalyzed, 'w')
@@ -313,6 +313,6 @@ for row in range(nMols) :
 	for column in range(nMols) :
 		#out_file.write(str(second_moment_inv_mass[row][column])+ ' ')
 		out_file_inv_var.write("%d %d %f\n" % (row, column, var_inv_mass[row][column]))
-        out_file.write("\n")
+	out_file.write("\n")
 out_file_inv_var.close()
 
