@@ -12,8 +12,8 @@ import sys as sys
 
 #file details from custom dump trajectory
 #log file is now .traj file
-if(len(sys.argv) != 9) :
-        print "ERROR data.lammpstrj atom_index1 atom_index2 num_atoms_per_molecule ShellRad num_CG_atoms_per_frame frameStart frameEnd"
+if(len(sys.argv) != 10) :
+        print "ERROR data.lammpstrj atom_index1 atom_index2 num_atoms_per_molecule ShellRad NeighBin num_CG_atoms_per_frame frameStart frameEnd"
         exit(0)
 
 name = sys.argv[1] 
@@ -21,10 +21,11 @@ aType1 =  int(sys.argv[2])
 aType2 = int(sys.argv[3])
 nAtomsMol = int(sys.argv[4])
 ShellRad = float(sys.argv[5])
-nCG = int(sys.argv[6]) # number of actual CG sites per frame (nAtoms - nSolvent)
+NeighBin = float(sys.argv[6])
+nCG = int(sys.argv[7]) # number of actual CG sites per frame (nAtoms - nSolvent)
 
-frameStart = int(sys.argv[7])
-frameEnd = int(sys.argv[8])
+frameStart = int(sys.argv[8])
+frameEnd = int(sys.argv[9])
 
 # Upper and lower bound of the coordinates
 Xb = [0, 0]
@@ -92,9 +93,9 @@ for i in range(nFramesAnalyzed) :
 	# construct a neighbor grid of solvent particles
 	sol_index = line_index + nMols*nAtomsMol + 9
 	# max index of cells in each dimension
-	Xi = int(math.floor(X/ShellRad))
-	Yj = int(math.floor(Y/ShellRad))
-	Zk = int(math.floor(Z/ShellRad))
+	Xi = int(math.floor(X/NeighBin))
+	Yj = int(math.floor(Y/NeighBin))
+	Zk = int(math.floor(Z/NeighBin))
 	# size of each cell
 	length = float(X/(Xi+1))
 	width = float(Y/(Yj+1))
