@@ -17,6 +17,15 @@
 # Outputs:
 #    vcg_mapped.lammpstrj - A LAMMPS trajectory (sorted such that all similar molecules are grouped together) with VCG sites. The VCG sites                             have atom types that increment starting from the largest atom type
 
+# Example Scenario:
+#    The trajectory has 144 DOPC, 156 Chol and 9000 water molecules. 
+#    Each DOPC has 6 atoms with atom types 1, 2, 3, 4, 3, 4. We want virtual sites for this.
+#    Each Chol has 3 atoms with atom types 5, 6, 7. We do NOT want virtual sites for this.
+#    Each water has 1 atom with atom types 8. 
+#    We want to define solvent with 6A for each VCG site
+#    We make the neighbor list grid slightly larger than this at 7.5A
+#    --> map_VCG_general.py data.lammpstrj "1 5 8" "144 156 9000" "6 3 1" "1 0 0" 6.0 7.5
+
 import numpy as np
 import math as math
 import sys as sys
