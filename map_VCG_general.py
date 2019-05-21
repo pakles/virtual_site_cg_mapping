@@ -124,7 +124,6 @@ largest_atype = 0
 traj_file = open(trajname,'r')
 all_lines = traj_file.readlines()
 traj_file.close()
-#out_file = open("ExplicitForce_n=%d.lammpstrj" % nFramesAnalyzed,'w')
 out_file = open(outname, 'w')
 
 nAtoms = int(all_lines[3].split()[0])
@@ -133,7 +132,7 @@ nFrames = len(all_lines) / ( nAtoms + 9 )
 
 # the number of list elements should be the same
 if(len(head_list) != len(nmol_list) or len(head_list) != len(natom_list) or len(head_list) != len(vcg_flag_list)) :
-        print "Inconsistency detected in list definitions. Please check your inputs. Exiting..."
+        print "ERROR: Inconsistency detected in list definitions. Please check your inputs. Exiting..."
         exit(1)
 
 # the number of non-solvent + solvent CG atoms should be less than the number of atoms in your trajectory
@@ -148,12 +147,12 @@ for i in range(len(head_list)-1) :
 nVCG = nAtomsFinal - nAtomsFinal_noVCG
 
 if( (nAtomsFinal_noVCG + nSol) > nAtoms ) :
-        print "Your molecule statistics are inconsistent with the available atoms in your trajectory file. Please check your inputs. Exiting..."
+        print "ERROR: Your molecule statistics are inconsistent with the available atoms in your trajectory file. Please check your inputs. Exiting..."
         exit(1)
 # --------------------------------------------------------------------------
 
 print "Analyzing a total of %d frames, each has %d atoms but will be reduced to %d atoms (without virtual sites)\n" % (nFrames,nAtoms,nAtomsFinal_noVCG)
-print "Creating %d total atoms per frame (for %d molecules total) to represent solvent beads\n" % (nAtomsFinal, nMolsFinal)
+print "Creating %d total atoms per frame (for %d molecules total) to represent solvent beads from %d solvent molecules\n" % (nAtomsFinal, nMolsFinal, nSol)
 print "Using %d VCG sites\n" % (nVCG)
 write = out_file.write
 
@@ -169,12 +168,17 @@ for i in range(nFrames) :
                 virtual_sites.append([])
         
         solvent_sites = np.zeros((nSol,8))
-        solvent_assignment = np.zeros((nSol,1000)) #first index is the number of assigned VCG sites, the rest is the list of VCG indices; this will be used to determine dIJ and cIJ as well
-        VCG_assignment = np.zeros((int(len(head_list)-1),nAtomsFinal_noVCG,1000)) #first index is the number of assigned solvent sites, the rest is the list of SOLVENT indices
+
+        # for the following two solvent assignment lists
+        # the first index [0] = the number of assigned VCG/solvent molecules
+        # the following n>0 indicies = the index of each assigned VCG/solvent molecule
+        # these lists can be used to determine dij and cij as well
+        solvent_assignment = np.zeros((nSol,1000))
+        VCG_assignment = np.zeros((int(len(head_list)-1),nAtomsFinal_noVCG,1000))
 
 	# first modify the 9 head lines with new number of atoms and print the rest of the header
 	line_index = (i)*(nAtoms+9)
-        print "Starting from line %d" % line_index
+        # print "Starting from line %d" % line_index
 	header = []
 	Xb = np.asarray([float(item) for item in all_lines[line_index + 5].split()], dtype=np.float64)
 	Yb = np.asarray([float(item) for item in all_lines[line_index + 6].split()], dtype=np.float64)
@@ -198,7 +202,8 @@ for i in range(nFrames) :
         print "Computing frame %d" % i
         print "Box dimensions: L:%f  W:%f  H:%f" % (lenX, lenY, lenZ)
         print "Neighbor search grid dimensions: L:%d  W:%d  H:%d" % (nX, nY, nZ)
-	# neighgrid[nX][nY][nZ][0] = num of solvent particles in each cell, neighgrid[Xi][Yj][Zk][n>0] : index of solvent particles within this cell
+	# neighgrid[nX][nY][nZ][0] = num of solvent particles in each cell
+        # neighgrid[nX][nY][nZ][n>0] = index of solvent particles within this cell
 	neighgrid = np.zeros((nX, nY, nZ, nmol_list[-1]+1), dtype=np.int) #x, y, z, list size[0] and list of solvent indicies (solvent data in solvent_sites)
         print neighgrid.shape
         # process all solvent molecules first
@@ -206,11 +211,21 @@ for i in range(nFrames) :
 	for iSol in range(nSol) :
 		solvent_sites[iSol,:] = np.asarray([float(item) for item in all_lines[sol_index + iSol].split()], dtype=np.float64)
                 # if unwrapped, solvent site coordinates should be rewrapped
+                atype = int(solvent_sites[iSol,1])
+                if(atype != head_list[-1]) :
+                        print "ERROR: We are processing a non-solvent atom (iSol %d) in the solvent block. Exiting now..." % (iSol)
+                        exit(1)
                 solvent_sites[iSol,2:5] = get_wrapped_coords(solvent_sites[iSol,2:5], Xb, Yb, Zb)
                 x_grid, y_grid, z_grid = get_neigh_grid_bins(solvent_sites[iSol,2:5], Xb, Yb, Zb, nX, nY, nZ, neigh_bin)
                 neighgrid[x_grid][y_grid][z_grid][0] += 1
-		counter = neighgrid[x_grid][x_grid][z_grid][0]
+		counter = neighgrid[x_grid][y_grid][z_grid][0]
 		neighgrid[x_grid][y_grid][z_grid][counter] = iSol
+
+                # for debugging
+                #test_list = [1341, 2294, 2418, 4795, 4799, 6166, 6637, 6910, 7720, 8081, 8097, 9780]
+                #test_sid = iSol + nAtomsFinal_noVCG
+                #if(test_sid in test_list) :
+                #        print "Testing viable solvent: x,y,z_grids = %d, %d, %d for solv_id %d" % (x_grid, y_grid, z_grid, test_sid)
 
         # process all molecules and assign to cg_sites [list of lists, first level contains each type of molecule]
         # molecules can be out of order so we need to process line-by-line (id, type, x, y, z, fx, fy, fz)
@@ -254,7 +269,8 @@ for i in range(nFrames) :
                         hx = atominfo[2]
                         hy = atominfo[3]
                         hz = atominfo[4]
-                        hx_grid, hy_grid, hz_grid = get_neigh_grid_bins(atominfo[2:5], Xb, Yb, Zb, nX, nY, nZ, neigh_bin)
+                        hpos = get_wrapped_coords(np.asarray([hx,hy,hz]), Xb, Yb, Zb)
+                        hx_grid, hy_grid, hz_grid = get_neigh_grid_bins(hpos, Xb, Yb, Zb, nX, nY, nZ, neigh_bin)
 
                         range_x = range_y = range_z = [-1, 0, 1]
                         # now iterate through all solvent particles in neighboring cells to find the ones in the solvation shell
@@ -274,16 +290,27 @@ for i in range(nFrames) :
                         for a in range_x :
                                 for b in range_y :
                                         for c in range_z :
+                                                # for debugging
+                                                #if(mid == 0 and aid == 0) :
+                                                #        print "Acceptable grid x,y,z: %d, %d, %d" % (hx_grid+a,hy_grid+b,hz_grid+c)
                                                 for iSol in range(int(neighgrid[hx_grid + a][hy_grid + b][hz_grid + c][0])) :
                                                         solv_id = neighgrid[hx_grid + a][hy_grid + b][hz_grid + c][iSol+1]
                                                         sx = solvent_sites[solv_id][2]
                                                         sy = solvent_sites[solv_id][3]
                                                         sz = solvent_sites[solv_id][4]
 
-                                                        dr[0] = min(abs(hx-sx), lenX - abs(hx-sx))
-                                                        dr[1] = min(abs(hy-sy), lenY - abs(hy-sy))
-                                                        dr[2] = min(abs(hz-sz), lenZ - abs(hz-sz))
+                                                        dr[0] = min(abs(hpos[0]-sx), lenX - abs(hpos[0]-sx))
+                                                        dr[1] = min(abs(hpos[1]-sy), lenY - abs(hpos[1]-sy))
+                                                        dr[2] = min(abs(hpos[2]-sz), lenZ - abs(hpos[2]-sz))
                                                         distance = np.linalg.norm(dr)
+
+                                                        # for debugging
+                                                        #if(mid == 0 and aid == 0) :
+                                                        #        test_list = [1341, 2294, 2418, 4795, 4799, 6166, 6637, 6910, 7720, 8081, 8097, 9780]
+                                                        #        test_sid = solv_id + nAtomsFinal_noVCG
+                                                        #        if(test_sid in test_list) :
+                                                        #                print "Testing viable solvent: distance = %f" % distance
+
                                                         if distance <= solv_rad :
                                                                 # print "We have found a solvent bead for mid %d and aid %d" % (mid, aid)
                                                                 # assign this solvent to mid
@@ -293,6 +320,10 @@ for i in range(nFrames) :
                                                                 VCG_assignment[mid][aid][0] += 1
                                                                 vcg_assign_list_id = int(VCG_assignment[mid][aid][0])
                                                                 VCG_assignment[mid][aid][vcg_assign_list_id] = solv_id
+
+                                                                #for debugging
+                                                                #if(mid == 0 and aid == 0) :
+                                                                #        print "Found solvent aid : %d" % (solv_id + nAtomsFinal_noVCG)
 
         # after solvent assignment, check for uniqueness
         nUniqueSolv = 0
@@ -320,6 +351,7 @@ for i in range(nFrames) :
                         vcg_force_vec = np.zeros(3)
                         head_pos_vec = atominfo[2:5]
 
+                        #print "The number assigned for mol type %d and atom %d is %d" % (mid, aid, nAssigned)
                         for sid in assigned_solv_list :
 
                                 # Adjust solvent position to be closest to head group due to PBC
