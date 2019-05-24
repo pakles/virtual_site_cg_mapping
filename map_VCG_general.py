@@ -368,22 +368,20 @@ for i in range(nFrames) :
                         # if this sid is specific to this site, dIJ = 1/Nspecific
                         # if this sid is NOT specific to this side, dIJ = 0
                         # if this sid is involved in this site, cIJ = 1/Ninvolved
-                        cIJ = 1.0 / float(nAssigned)
-                        dIJ = 0.0
 
-                        # calculate nSpecific
-                        nSpecific = 0.0
-                        for sid in assigned_solv_list :
-                                sid = int(sid)
-                                if(solvent_assignment[sid][0] == 1) :
-                                        nSpecific += 1.0
-
-                        if(nSpecific == 0.0) :
-                                print "ERROR: We have a VCG site with non-specific assignment? Cannot use force approximation scheme..."
-                                print "This is for molecule type %d and atom id %d with atom type %d" % (mid, aid, atype)
-                                exit(1)
-
-                        dIJ = 1.0 / nSpecific
+#                        cIJ = 1.0 / float(nAssigned)
+#                        dIJ = 0.0
+#                        # calculate nSpecific
+#                        nSpecific = 0.0
+#                        for sid in assigned_solv_list :
+#                                sid = int(sid)
+#                                if(solvent_assignment[sid][0] == 1) :
+#                                        nSpecific += 1.0
+#                        if(nSpecific == 0.0) :
+#                                print "ERROR: We have a VCG site with non-specific assignment? Cannot use forc#e approximation scheme..."
+#                                print "This is for molecule type %d and atom id %d with atom type %d" % (mid, #aid, atype)
+#                                exit(1)
+#                        dIJ = 1.0 / nSpecific
 
                         #print "The number assigned for mol type %d and atom %d is %d" % (mid, aid, nAssigned)
                         for sid in assigned_solv_list :
@@ -395,9 +393,18 @@ for i in range(nFrames) :
 
                                 vcg_pos_vec = np.add(vcg_pos_vec[:],temp_pos_vec[:])
 
-                                # if specific to this site, add force with dIJ/cIJ prefactor
-                                if(solvent_assignment[sid][0] == 1) :                                      
-                                        vcg_force_vec = np.add(vcg_force_vec[:],solvent_sites[sid][5:8] * dIJ / cIJ)
+#                                # if specific to this site, add force with dIJ/cIJ prefactor
+#                                if(solvent_assignment[sid][0] == 1) :                                      
+#                                        vcg_force_vec = np.add(vcg_force_vec[:],solvent_sites[sid][5:8] * dIJ #/ cIJ)
+
+                                # simply add forces based on 1/assignment for that solvent site
+                                if(solvent_assignment[sid][0] == 0) :
+                                        print "ERROR: We have a solvent site with no assignment? Cannot use forc#e approximation scheme..." 
+                                        print "This is for molecule type %d and atom id %d with atom type %d" % (mid, aid, atype)
+                                        exit(1)
+                                solv_frac = 1.0 / float(solvent_assignment[sid][0])
+
+                                vcg_force_vec = np.add(vcg_force_vec[:],solvent_sites[sid][5:8] * solv_frac)
 
                         vcg_pos_vec[:] /= float(nAssigned)
                         virtual_sites[mid].append([vcg_pos_vec, vcg_force_vec])
